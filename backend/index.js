@@ -1,46 +1,58 @@
 // index.js
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const cloudinary = require('./config/cloudinary'); // your cloudinary config
+const cloudinary = require('./config/cloudinary');
+
 const e_commerce_users = require('./models/user');
 const product_schema = require('./models/product');
-const cart = require('./models/cart')
+const cart = require('./models/cart');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// ------------------------------
+// CORS FOR DEPLOYED FRONTEND
+// ------------------------------
+app.use(cors({
+  origin: "https://mern-ecommerce-69hz.vercel.app",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // ------------------------------
-// MongoDB connection
+// MongoDB Atlas connection
 // ------------------------------
-mongoose.connect('mongodb://localhost:27017/ecommerce') // replace with MongoDB Atlas URI for production
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.error(err));
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected via Atlas"))
+  .catch(err => console.error("MongoDB Connection Error:", err));
+
 
 // ------------------------------
-// User Routes
+// USER ROUTES
 // ------------------------------
 
-// Signup
+// SIGNUP
 app.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     const exists = await e_commerce_users.findOne({ email });
+
     if (exists) return res.status(400).send("User already exists");
 
     const user = await e_commerce_users.create({ name, email, password });
     res.status(201).send(user);
+
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
 });
 
-// Login
+// LOGIN
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -49,7 +61,6 @@ app.post('/login', async (req, res) => {
     if (!user) return res.status(404).send("User not found");
     if (user.password !== password) return res.status(400).send("Incorrect password");
 
-    // ⭐ always send full user object with _id
     res.send({
       message: "User logged in",
       user: {
@@ -65,79 +76,95 @@ app.post('/login', async (req, res) => {
 });
 
 
-// Get user profile
+// GET PROFILE
 app.get('/profile/:email', async (req, res) => {
   try {
     const { email } = req.params;
     const user = await e_commerce_users.findOne({ email });
+
     if (!user) return res.status(404).send("User not found");
     res.send(user);
+
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
 });
 
-// Update profile
+
+// UPDATE PROFILE
 app.put('/profile/update', async (req, res) => {
   try {
     const { name, email, address } = req.body;
+
     const user = await e_commerce_users.findOneAndUpdate(
       { email },
       { name, address },
       { new: true }
     );
+
     res.send(user);
+
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
 });
 
+
 // ------------------------------
-// Cloudinary product upload
+// CLOUDINARY IMAGE UPLOAD
 // ------------------------------
 const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+  cloudinary,
   params: {
-    folder: 'ecommerce_products',
-    allowed_formats: ['jpg', 'png', 'jpeg'],
-  },
+    folder: "ecommerce_products",
+    allowed_formats: ["jpg", "png", "jpeg"]
+  }
 });
 
-const parser = multer({ storage });
+const upload = multer({ storage });
 
-app.post('/admin', parser.single('pro_image'), async (req, res) => {
+
+// ADD PRODUCT (ADMIN)
+app.post('/admin', upload.single('pro_image'), async (req, res) => {
   try {
     const { pro_name, pro_price } = req.body;
+
     const imageUrl = req.file.path; // Cloudinary URL
 
-    const pro = await product_schema.create({
+    const product = await product_schema.create({
       product_name: pro_name,
       product_price: pro_price,
-      product_image: imageUrl,
+      product_image: imageUrl
     });
 
-    res.status(201).send(pro);
+    res.status(201).send(product);
+
   } catch (err) {
+    console.error(err);
     res.status(500).send({ message: err.message });
   }
 });
 
-// Get all products
+
+// GET ALL PRODUCTS
 app.get('/products', async (req, res) => {
   try {
-    const products = await product_schema.find();
-    res.send(products);
+    const result = await product_schema.find();
+    res.send(result);
+
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
 });
 
+
+// ADD TO CART
 app.post('/cart', async (req, res) => {
   try {
     const { user_id, product_id } = req.body;
 
     if (!user_id || !product_id) {
-      return res.status(400).json({ message: "Missing user_id or product_id" });
+      return res.status(400).send({ message: "Missing user_id or product_id" });
     }
 
     const newItem = await cart.create({
@@ -153,24 +180,33 @@ app.post('/cart', async (req, res) => {
   }
 });
 
+
+// VIEW CART
 app.get('/viewcart', async (req, res) => {
   try {
-    const userId = req.query.userId; // get userId from frontend
-    // Populate product details
-    const cartItems = await cart.find({ user_id: userId }).populate('product_id');
+    const userId = req.query.userId;
+
+    const cartItems = await cart.find({ user_id: userId }).populate("product_id");
+
     res.send(cartItems);
+
   } catch (err) {
-    
-    res.status(500).send('Server error');
+    res.status(500).send({ message: err.message });
   }
 });
 
+
+// GET SINGLE PRODUCT
 app.get('/products/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const product = await product_schema.findById(id);
-    if (!product) return res.status(404).send({ message: "Product not found" });
-    res.send(product);
+    const findProduct = await product_schema.findById(req.params.id);
+
+    if (!findProduct) {
+      return res.status(404).send({ message: "Product not found" });
+    }
+
+    res.send(findProduct);
+
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
@@ -178,7 +214,7 @@ app.get('/products/:id', async (req, res) => {
 
 
 // ------------------------------
-// Start server
+// START SERVER
 // ------------------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✔ Backend Running on Port ${PORT}`));
