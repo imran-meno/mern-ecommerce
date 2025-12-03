@@ -13,7 +13,7 @@ const API_URL = "https://mern-ecommerce-oqzg.onrender.com";
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const { data } = await axios.get(`${API_URL}`/products);
+        const { data } = await axios.get(`${API_URL}/products)`;
         setProducts(data);
       } catch (err) {
       
