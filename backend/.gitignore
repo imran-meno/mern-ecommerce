@@ -3,6 +3,7 @@
 # Logs
 
 # ==========================
+.env
 
 logs
 *.log
@@ -54,4 +55,3 @@ src/admin.css
 
 assets/
 config/cloudinary.js
-.env
