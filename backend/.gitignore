@@ -51,7 +51,5 @@ dist-ssr/
 src/admin/
 src/admin.css
 
-# Assets
 
-assets/
 config/cloudinary.js
